@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "model_compression"
+version = "0.1"
+description = "NLP model compression on SuperGLUE Tasks"
+readme = "README.md"
+authors = [{name = "Alexander", email = "alexander@robonote.io"}]
+dependencies = [
+    "boto3",
+    "transformers",
+    "scipy",
+    "pandas",
+    "numpy",
+    "scikit-learn",
+    "datasets",
+    "seqeval",
+    "evaluate",
+    "notebook",
+    "openpyxl",
+    "accelerate"
+]
+
+
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = {find = {where = ["src"]}}
+
