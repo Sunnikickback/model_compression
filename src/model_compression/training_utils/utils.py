@@ -6,8 +6,46 @@ import operator
 import csv
 from typing import Optional
 from dataclasses import dataclass
+from typing import List, Optional, Tuple, Union
 
-@dataclasses
+# +
+task_metrics = {
+    "boolq": "acc",
+    # "cb": "acc_and_f1",
+    # "copa": "acc",
+    # "multirc": "em_and_f1",
+    # "record": "em_and_f1",
+    # "rte": "acc",
+    "wic": "acc",
+    "wsc": "acc_and_f1",
+}
+
+output_modes = {
+    # "ax-b": "classification",
+    # "ax-g": "classification",
+    "boolq": "classification",
+    # "cb": "classification",
+    # "copa": "classification",
+    # "multirc": "classification",
+    # "rte": "classification",
+    "wic": "span_classification",
+    "wsc": "span_classification",
+}
+tasks_num_labels = {
+    # "ax-b": 2,
+    # "ax-g": 2,
+    "boolq": 2,
+    # "cb": 3,
+    # "copa": 2,
+    # "rte": 2,
+    "wic": 2,
+    "wsc": 2,
+}
+
+
+# -
+
+@dataclass
 class InputExample:
     guid: str
     text_a: str
@@ -107,6 +145,7 @@ class InputFeatures:
         return json.dumps(dataclasses.asdict(self)) + "\n"
 
 
+# +
 @dataclass(frozen=True)
 class SpanClassificationFeatures(object):
     """
@@ -134,3 +173,18 @@ class SpanClassificationFeatures(object):
     def to_json_string(self):
         """Serializes this instance to a JSON string."""
         return json.dumps(self.to_dict(), indent=2, sort_keys=True) + "\n"
+    
+@dataclass
+class TrainConfig:
+    weight_decay: float = 0.01
+    max_steps: int = -1
+    gradient_accumulation_steps: int = 1
+    num_train_epochs: int = 30
+    warmup_ratio: float = 0.06
+    learning_rate: float = 0.00001
+    adam_epsilon:float = 1e-8
+    max_grad_norm:float = 1.0
+    train_batch_size: int = 16 
+    eval_batch_size:int = 32
+    eval_and_save_steps:float = 500
+

@@ -13,6 +13,7 @@ dependencies = [
     "transformers",
     "scipy",
     "pandas",
+    "tqdm",
     "numpy",
     "scikit-learn",
     "datasets",
@@ -22,7 +23,6 @@ dependencies = [
     "openpyxl",
     "accelerate"
 ]
-
 
 
 [tool.setuptools]

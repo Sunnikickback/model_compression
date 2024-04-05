@@ -1,9 +1,14 @@
-from src.model_compression.training_utils.processors import (
+from model_compression.training_utils.processors import (
                                            BoolqProcessor, WicProcessor, WscProcessor,
                                            # CopaProcessor, MultircProcessor, RteProcessor,
-                                           # RecordProcessor,CbProcessor,
-                                            # DiagnosticBroadProcessor, DiagnosticGenderProcessor,
+                                           # CbProcessor, DiagnosticBroadProcessor, DiagnosticGenderProcessor
                                         )
+from model_compression.training_utils.utils import output_modes
+from model_compression.training_utils.utils import SpanClassificationExample, InputFeatures
+import torch
+from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
+import numpy as np
+import pandas as pd
 
 
 processors = {
@@ -13,46 +18,14 @@ processors = {
     # "cb": CbProcessor,
     # "copa": CopaProcessor,
     # "multirc": MultircProcessor,
-    # "record": RecordProcessor,
     # "rte": RteProcessor,
     "wic": WicProcessor,
     "wsc": WscProcessor,
 }
 
-output_modes = {
-    # "ax-b": "classification",
-    # "ax-g": "classification",
-    "boolq": "classification",
-    # "cb": "classification",
-    # "copa": "classification",
-    # "multirc": "classification",
-    # "record": "classification",
-    # "rte": "classification",
-    "wic": "span_classification",
-    "wsc": "span_classification",
-}
 
-tasks_metrics = {
-    "boolq": "acc",
-    # "cb": "acc_and_f1",
-    # "copa": "acc",
-    # "multirc": "em_and_f1",
-    # "record": "em_and_f1",
-    # "rte": "acc",
-    "wic": "acc",
-    "wsc": "acc_and_f1",
-}
 
-tasks_num_labels = {
-    # "ax-b": 2,
-    # "ax-g": 2,
-    "boolq": 2,
-    # "cb": 3,
-    # "copa": 2,
-    # "rte": 2,
-    "wic": 2,
-    "wsc": 2,
-}
+
 
 def superglue_convert_examples_to_features(
     examples,
@@ -112,7 +85,6 @@ def superglue_convert_examples_to_features(
             else:
                 input_ids, token_type_ids = inputs_a["input_ids"], inputs_a["token_type_ids"]
                 span_locs = span_locs_a
-
         else:
             inputs = tokenizer.encode_plus(
                 example.text_a,
@@ -179,7 +151,7 @@ def superglue_convert_examples_to_features(
 
     return features
 
-def load_and_cache_examples(task, tokenizer, data_dir, split="train"):
+def load_and_cache_examples(task, tokenizer, data_dir, split="train", max_seq_length=512):
     processor = processors[task]()
     output_mode = output_modes[task]
     label_list = processor.get_labels()
@@ -197,7 +169,7 @@ def load_and_cache_examples(task, tokenizer, data_dir, split="train"):
         examples,
         tokenizer,
         label_list=label_list,
-        max_length=args.max_seq_length,
+        max_length=max_seq_length,
         output_mode=output_mode,
         pad_on_left=0,
         pad_token=tokenizer.convert_tokens_to_ids([tokenizer.pad_token])[0],
@@ -226,8 +198,5 @@ def load_and_cache_examples(task, tokenizer, data_dir, split="train"):
         dataset = TensorDataset(all_input_ids, all_attention_mask, all_token_type_ids, all_labels,
                                 all_seq_lengths, all_guids)
 
-    if args.task_name == "record" and split in ["dev", "test"]:
-        answers = processor.get_answers(args.data_dir, split)
-        return dataset, answers
-    else:
-        return dataset
+    
+    return dataset

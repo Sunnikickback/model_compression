@@ -7,7 +7,7 @@ import csv
 from typing import Optional
 from dataclasses import dataclass
 
-from src.model_compression.training_utils.utils import DataProcessor, InputExample, SpanClassificationExample
+from model_compression.training_utils.utils import DataProcessor, InputExample, SpanClassificationExample
 
 
 class BoolqProcessor(DataProcessor):
