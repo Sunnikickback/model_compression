@@ -9,12 +9,14 @@ from model_compression.training_utils.datasets import load_and_cache_examples
 from model_compression.training_utils.utils import TrainConfig, task_metrics
 import os
 
+
 def set_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-    
+
+
 def evaluate(task_name, model, tokenizer, eval_batch_size, device, use_fixed_seq_length, output_mode,
              model_type, data_dir, split="dev", prefix="", use_tqdm=True):
 
@@ -49,10 +51,7 @@ def evaluate(task_name, model, tokenizer, eval_batch_size, device, use_fixed_seq
                       "labels": batch[3]}
             if output_mode == "span_classification":
                 inputs["spans"] = batch[4]
-            inputs["token_type_ids"] = (
-                batch[2][:,:batch_seq_length].contiguous() if model_type 
-                    in ["bert", "xlnet", "albert"] else None
-            )  
+            inputs["token_type_ids"] = None
         else:
             inputs = {"input_ids": batch[0], "attention_mask": batch[1], "labels": batch[3]}
             if output_mode == "span_classification":
@@ -92,6 +91,7 @@ def evaluate(task_name, model, tokenizer, eval_batch_size, device, use_fixed_seq
                 writer.write("%s = %s\n" % (key, str(result[key])))
     return results, preds, ex_ids
 
+
 def train(train_dataset, model, tokenizer, output_mode, model_type, task_name, data_dir, train_config:TrainConfig, device="cuda:0"):
 
     train_sampler = RandomSampler(train_dataset)
@@ -99,7 +99,7 @@ def train(train_dataset, model, tokenizer, output_mode, model_type, task_name, d
 
     if train_config.max_steps > 0:
         t_total = train_config.max_steps
-        num_train_epochs = train_config.max_steps // (len(train_dataloader) // train_config.gradient_accumulation_steps) + 1
+        train_config.num_train_epochs = train_config.max_steps // (len(train_dataloader) // train_config.gradient_accumulation_steps) + 1
     else: 
         t_total = len(train_dataloader) // train_config.gradient_accumulation_steps * train_config.num_train_epochs
     num_warmup_steps = int(train_config.warmup_ratio * t_total)
@@ -140,9 +140,7 @@ def train(train_dataset, model, tokenizer, output_mode, model_type, task_name, d
             inputs = {"input_ids": batch[0], "attention_mask": batch[1], "labels": batch[3]}
             if output_mode == "span_classification":
                 inputs["spans"] = batch[4]
-            inputs["token_type_ids"] = (
-                batch[2] if model_type in ["bert", "xlnet", "albert"] else None
-            )  
+            inputs["token_type_ids"] = None
                 
             outputs = model(**inputs)
             loss = outputs[0]

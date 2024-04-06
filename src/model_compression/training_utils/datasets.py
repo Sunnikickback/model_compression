@@ -1,31 +1,22 @@
-from model_compression.training_utils.processors import (
+from src.model_compression.training_utils.processors import (
                                            BoolqProcessor, WicProcessor, WscProcessor,
-                                           # CopaProcessor, MultircProcessor, RteProcessor,
-                                           # CbProcessor, DiagnosticBroadProcessor, DiagnosticGenderProcessor
-                                        )
+                                           CopaProcessor, MultircProcessor, RteProcessor,
+                                           CbProcessor)
 from model_compression.training_utils.utils import output_modes
 from model_compression.training_utils.utils import SpanClassificationExample, InputFeatures
 import torch
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
-import numpy as np
-import pandas as pd
+from torch.utils.data import TensorDataset
 
 
 processors = {
-    # "ax-b": DiagnosticBroadProcessor,
-    # "ax-g": DiagnosticGenderProcessor,
     "boolq": BoolqProcessor,
-    # "cb": CbProcessor,
-    # "copa": CopaProcessor,
-    # "multirc": MultircProcessor,
-    # "rte": RteProcessor,
+    "cb": CbProcessor,
+    "copa": CopaProcessor,
+    "multirc": MultircProcessor,
+    "rte": RteProcessor,
     "wic": WicProcessor,
     "wsc": WscProcessor,
 }
-
-
-
-
 
 def superglue_convert_examples_to_features(
     examples,
@@ -79,7 +70,6 @@ def superglue_convert_examples_to_features(
                 else:
                     assert False, "Something is wrong"
 
-                # check that the length of the input ids is expected (not necessarily the exact ids)
                 assert len(input_ids) == len(tmp), "Span tracking tokenization produced inconsistent result!"
 
             else:
@@ -176,7 +166,6 @@ def load_and_cache_examples(task, tokenizer, data_dir, split="train", max_seq_le
         pad_token_segment_id=0,
     )
 
-    # Convert to Tensors and build dataset
     all_guids = torch.tensor([f.guid for f in features], dtype=torch.long)
     all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
     all_attention_mask = torch.tensor([f.attention_mask for f in features], dtype=torch.long)
@@ -188,8 +177,6 @@ def load_and_cache_examples(task, tokenizer, data_dir, split="train", max_seq_le
         all_labels = torch.tensor([f.label for f in features], dtype=torch.float)
 
     if output_mode in ["span_classification"]:
-        # all_starts = torch.tensor([[s[0] for s in f.span_locs] for f in features], dtype=torch.long)
-        # all_ends = torch.tensor([[s[1] for s in f.span_locs] for f in features], dtype=torch.long)
         all_spans = torch.tensor([f.span_locs for f in features])
         dataset = TensorDataset(
             all_input_ids, all_attention_mask, all_token_type_ids, all_labels, all_spans, all_seq_lengths, all_guids

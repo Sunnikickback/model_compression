@@ -1,9 +1,10 @@
 from collections import defaultdict
 from sklearn.metrics import f1_score
-import numpy as np
+
 
 def simple_accuracy(preds, labels):
     return (preds == labels).mean()
+
 
 def acc_and_f1(preds, labels, f1_avg="binary"):
     acc = simple_accuracy(preds, labels)
@@ -14,7 +15,7 @@ def acc_and_f1(preds, labels, f1_avg="binary"):
         "acc_and_f1": (acc + f1) / 2,
     }
 
-def superglue_compute_metrics(task_name, preds, labels, guids=None, answers=None):
+def superglue_compute_metrics(task_name, preds, labels, guids=None):
     assert len(preds) == len(labels)
     if task_name == "boolq":
         return {"acc": simple_accuracy(preds, labels)}
