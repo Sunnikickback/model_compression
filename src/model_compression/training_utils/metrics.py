@@ -1,4 +1,5 @@
 from collections import defaultdict
+
 from sklearn.metrics import f1_score
 
 
@@ -14,6 +15,7 @@ def acc_and_f1(preds, labels, f1_avg="binary"):
         "f1": f1,
         "acc_and_f1": (acc + f1) / 2,
     }
+
 
 def superglue_compute_metrics(task_name, preds, labels, guids=None):
     assert len(preds) == len(labels)

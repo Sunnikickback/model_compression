@@ -1,42 +1,53 @@
-from src.model_compression.training_utils.processors import (
-                                           BoolqProcessor, WicProcessor, WscProcessor,
-                                           CopaProcessor, MultircProcessor, RteProcessor,
-                                           CbProcessor)
-from model_compression.training_utils.utils import output_modes
-from model_compression.training_utils.utils import SpanClassificationExample, InputFeatures
 import torch
 from torch.utils.data import TensorDataset
 
+from .processors import processors
+from .utils import SpanClassificationExample, InputFeatures
+from .utils import output_modes, SpanClassificationFeatures
 
-processors = {
-    "boolq": BoolqProcessor,
-    "cb": CbProcessor,
-    "copa": CopaProcessor,
-    "multirc": MultircProcessor,
-    "rte": RteProcessor,
-    "wic": WicProcessor,
-    "wsc": WscProcessor,
-}
+
+def tokenize_tracking_span(tokenizer, text, spans):
+    toks = tokenizer.encode_plus(text, return_token_type_ids=True)
+    full_toks = toks["input_ids"]
+    prefix_len = len(tokenizer.decode(full_toks[:1])) + 1  # add a space
+    len_covers = []
+    for i in range(2, len(full_toks)):
+        partial_txt_len = len(tokenizer.decode(full_toks[:i], clean_up_tokenization_spaces=False))
+        len_covers.append(partial_txt_len - prefix_len)
+
+    span_locs = []
+    for start, end in spans:
+        start_tok, end_tok = None, None
+        for tok_n, len_cover in enumerate(len_covers):
+            if len_cover >= start and start_tok is None:
+                start_tok = tok_n + 1
+            if len_cover >= end:
+                assert start_tok is not None
+                end_tok = tok_n + 1
+                break
+        assert start_tok is not None, "start_tok is None!"
+        assert end_tok is not None, "end_tok is None!"
+        span_locs.append((start_tok, end_tok))
+    return toks, span_locs
+
 
 def superglue_convert_examples_to_features(
-    examples,
-    tokenizer,
-    max_length=512,
-    task=None,
-    label_list=None,
-    output_mode=None,
-    pad_on_left=False,
-    pad_token=0,
-    pad_token_segment_id=0,
-    mask_padding_with_zero=True,
+        examples,
+        tokenizer,
+        max_length=512,
+        task=None,
+        label_list=None,
+        output_mode=None,
+        pad_token=0,
+        pad_token_segment_id=0,
+        mask_padding_with_zero=True,
 ):
-
     if task is not None:
-        processor = superglue_processors[task]()
+        processor = processors[task]()
         if label_list is None:
             label_list = processor.get_labels()
         if output_mode is None:
-            output_mode = superglue_output_modes[task]
+            output_mode = output_modes[task]
 
     label_map = {label: i for i, label in enumerate(label_list)}
 
@@ -86,21 +97,14 @@ def superglue_convert_examples_to_features(
             )
             input_ids, token_type_ids = inputs["input_ids"], inputs["token_type_ids"]
 
-
         attention_mask = [1 if mask_padding_with_zero else 0] * len(input_ids)
 
         seq_length = len(input_ids)
         padding_length = max_length - len(input_ids)
-        if pad_on_left:
-            assert False, "Not implemented correctly wrt span tracking!"
-            input_ids = ([pad_token] * padding_length) + input_ids
-            attention_mask = ([0 if mask_padding_with_zero else 1] * padding_length) + attention_mask
-            token_type_ids = ([pad_token_segment_id] * padding_length) + token_type_ids
 
-        else:
-            input_ids = input_ids + ([pad_token] * padding_length)
-            attention_mask = attention_mask + ([0 if mask_padding_with_zero else 1] * padding_length)
-            token_type_ids = token_type_ids + ([pad_token_segment_id] * padding_length)
+        input_ids = input_ids + ([pad_token] * padding_length)
+        attention_mask = attention_mask + ([0 if mask_padding_with_zero else 1] * padding_length)
+        token_type_ids = token_type_ids + ([pad_token_segment_id] * padding_length)
 
         assert len(input_ids) == max_length, "Error with input length {} vs {}".format(len(input_ids), max_length)
         assert len(attention_mask) == max_length, "Error with input length {} vs {}".format(
@@ -115,7 +119,6 @@ def superglue_convert_examples_to_features(
             label = float(example.label)
         else:
             raise KeyError(output_mode)
-
 
         if isinstance(example, SpanClassificationExample):
             feats = SpanClassificationFeatures(
@@ -141,19 +144,20 @@ def superglue_convert_examples_to_features(
 
     return features
 
-def load_and_cache_examples(task, tokenizer, data_dir, split="train", max_seq_length=512):
-    processor = processors[task]()
-    output_mode = output_modes[task]
+
+def load_and_cache_examples(tokenizer, model_config, split="train", max_seq_length=512):
+    processor = processors[model_config.task_name]()
+    output_mode = output_modes[model_config.task_name]
     label_list = processor.get_labels()
 
     if split == "train":
         get_examples = processor.get_train_examples
     elif split == "dev":
         get_examples = processor.get_dev_examples
-    elif split == "test":
+    else:
         get_examples = processor.get_test_examples
 
-    examples = get_examples(data_dir)
+    examples = get_examples(model_config.data_dir)
 
     features = superglue_convert_examples_to_features(
         examples,
@@ -161,7 +165,6 @@ def load_and_cache_examples(task, tokenizer, data_dir, split="train", max_seq_le
         label_list=label_list,
         max_length=max_seq_length,
         output_mode=output_mode,
-        pad_on_left=0,
         pad_token=tokenizer.convert_tokens_to_ids([tokenizer.pad_token])[0],
         pad_token_segment_id=0,
     )
@@ -171,7 +174,7 @@ def load_and_cache_examples(task, tokenizer, data_dir, split="train", max_seq_le
     all_attention_mask = torch.tensor([f.attention_mask for f in features], dtype=torch.long)
     all_token_type_ids = torch.tensor([f.token_type_ids for f in features], dtype=torch.long)
     all_seq_lengths = torch.tensor([f.seq_length for f in features], dtype=torch.long)
-    if output_mode in ["classification", "span_classification"]:
+    if output_mode in ["classification", "span_classification", "ner_classification"]:
         all_labels = torch.tensor([f.label for f in features], dtype=torch.long)
     elif output_mode == "regression":
         all_labels = torch.tensor([f.label for f in features], dtype=torch.float)
@@ -179,11 +182,11 @@ def load_and_cache_examples(task, tokenizer, data_dir, split="train", max_seq_le
     if output_mode in ["span_classification"]:
         all_spans = torch.tensor([f.span_locs for f in features])
         dataset = TensorDataset(
-            all_input_ids, all_attention_mask, all_token_type_ids, all_labels, all_spans, all_seq_lengths, all_guids
+            all_input_ids, all_attention_mask, all_token_type_ids,
+            all_labels, all_spans, all_seq_lengths, all_guids
         )
     else:
         dataset = TensorDataset(all_input_ids, all_attention_mask, all_token_type_ids, all_labels,
                                 all_seq_lengths, all_guids)
 
-    
     return dataset

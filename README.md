@@ -1,9 +1,9 @@
 # model_compression
 ## Tasks:
-WiC - token classification
+WiC - text classification
 SST-2 - text classification 
 BoolQ - question answering
-MaskedLM
+
 
 ## Models:
 Roberta, XLM-Roberta, DeBerta

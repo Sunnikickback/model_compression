@@ -1,13 +1,8 @@
-import dataclasses
 import os
 import json
 from collections import defaultdict
 import operator
-import csv
-from typing import Optional
-from dataclasses import dataclass
-
-from model_compression.training_utils.utils import DataProcessor, InputExample, SpanClassificationExample
+from .utils import DataProcessor, InputExample, SpanClassificationExample
 
 
 class BoolqProcessor(DataProcessor):
@@ -88,7 +83,7 @@ class WscProcessor(DataProcessor):
         return examples
 
     def write_preds(self, preds, ex_ids, out_dir):
-        preds = preds[ex_ids]  # sort just in case we got scrambled
+        preds = preds[ex_ids]
         idx2label = {i: label for i, label in enumerate(self.get_labels())}
         with open(os.path.join(out_dir, "WSC.jsonl"), "w") as pred_fh:
             for idx, pred in enumerate(preds):
@@ -327,3 +322,13 @@ class RteProcessor(DataProcessor):
             for idx, pred_exid in enumerate(preds_with_exids):
                 pred_label = idx2label[int(pred_exid[0])]
                 pred_fh.write(f"{json.dumps({'idx': idx, 'label': pred_label})}\n")
+
+processors = {
+    "boolq": BoolqProcessor,
+    "cb": CbProcessor,
+    "copa": CopaProcessor,
+    "multirc": MultircProcessor,
+    "rte": RteProcessor,
+    "wic": WicProcessor,
+    "wsc": WscProcessor,
+}
