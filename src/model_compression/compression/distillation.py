@@ -1,15 +1,21 @@
 from torch.nn import MSELoss, CosineSimilarity
-from transformers import AdamW, get_linear_schedule_with_warmup
+from transformers import AdamW, get_linear_schedule_with_warmup, RobertaForSequenceClassification
 from torch.utils.data import RandomSampler
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 import torch
-from ..training_utils.training import evaluate
-from ..training_utils.utils import TrainConfig, set_seed, task_metrics, DistilConfig, ModelConfig, output_modes
+
+from model_compression.training_utils.datasets import load_and_cache_examples
+from model_compression.training_utils.training import evaluate
+from model_compression.training_utils.utils import TrainConfig, set_seed, task_metrics, DistilConfig, ModelConfig, output_modes, \
+    parse_args, get_model
 
 
 def distill(train_dataset, teacher_model, student_model, tokenizer,
             model_config: ModelConfig, train_config: TrainConfig, distil_config: DistilConfig, device="cuda:0"):
+    student_model.to(device)
+    teacher_model.to(device)
+
     output_mode = output_modes[model_config.task_name]
     train_sampler = RandomSampler(train_dataset)
     train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=train_config.train_batch_size)
@@ -164,7 +170,19 @@ def distill(train_dataset, teacher_model, student_model, tokenizer,
 
 
 def main():
-    pass
+    args = parse_args("distillation")
+    distil_model, tokenizer, model_config = get_model(args)
+    distil_config = DistilConfig.from_args(args)
+    train_dataset = load_and_cache_examples(tokenizer, model_config, max_seq_length=args.max_seq_length)
+    train_config = TrainConfig().from_args(args)
+    teacher_model = torch.load(args.teacher_path)
+    _, _ = distill(train_dataset, teacher_model, distil_model, tokenizer, model_config, train_config, distil_config)
+    result, preds, ex_ids = evaluate(distil_model, tokenizer, model_config=model_config,
+                                     eval_batch_size=train_config.eval_batch_size,
+                                     device="cuda:0", use_fixed_seq_length=False, use_tqdm=True)
+    result = dict((f"{k}", v) for k, v in result.items())
+    print(result)
+    torch.save(distil_model, f"distilled_{model_config.model_type}_{model_config.task_name}.pt")
 
 
 if __name__ == "__main__":

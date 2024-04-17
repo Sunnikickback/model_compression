@@ -8,8 +8,7 @@ from typing import List, Optional, Tuple, Union
 import numpy as np
 import torch
 from transformers import RobertaConfig, RobertaTokenizer, RobertaForSequenceClassification
-from src.model_compression.training_utils.modules import RobertaForSpanClassification
-from src.model_compression.training_utils.processors import processors
+from model_compression.training_utils.modules import RobertaForSpanClassification
 
 MODEL_CLASSES = {
     "roberta": (
@@ -147,6 +146,14 @@ class DistilConfig:
     state_distill_cs: bool
     att_loss_ratio: float
 
+    @staticmethod
+    def from_args(args) -> 'DistilConfig':
+        return DistilConfig(
+            state_loss_ratio=args.state_loss_ratio,
+            state_distill_cs=args.state_distill_cs,
+            att_loss_ratio=args.att_loss_ratio
+        )
+
 
 @dataclass
 class TrainConfig:
@@ -155,10 +162,10 @@ class TrainConfig:
     gradient_accumulation_steps: int = 1
     num_train_epochs: int = 30
     warmup_ratio: float = 0.06
-    learning_rate: float = 0.00001
+    learning_rate: float = 1e-5
     adam_epsilon: float = 1e-8
     max_grad_norm: float = 1.0
-    train_batch_size: int = 16
+    train_batch_size: int = 32
     eval_batch_size: int = 32
     eval_and_save_steps: float = 500
 
@@ -170,6 +177,7 @@ class TrainConfig:
             gradient_accumulation_steps=args.gradient_accumulation_steps,
             num_train_epochs=args.num_train_epochs,
             learning_rate=args.learning_rate,
+            warmup_ratio=args.warmup_ratio,
             adam_epsilon=args.adam_epsilon,
             max_grad_norm=args.max_grad_norm,
             train_batch_size=args.train_batch_size,
@@ -200,10 +208,20 @@ def parse_args(mode):
     parser.add_argument("--model_checkpoint", default=None, type=str, required=True)
     parser.add_argument("--task_name", default=None, type=str, required=True)
     parser.add_argument("--do_lower_case", action="store_true")
+    if mode == "distillation":
+        parser.add_argument("--teacher_path", default=None, type=str, required=True)
+        parser.add_argument("--state_distill_cs", action="store_true")
+        parser.add_argument("--att_loss_ratio", default=0.0, type=float)
+        parser.add_argument("--state_loss_ratio", default=0.1, type=float)
+    if mode == "pruning":
+        parser.add_argument("--target_ffn_dim", default=3072, type=int)
+        parser.add_argument("--target_num_heads", default=12, type=int)
+        parser.add_argument("--dont_normalize_importance_by_layer", action="store_true")
     if mode == "quantization":
-        parser.add_argument("--nodes_to_exclude", default=None, type=str, required=True)
-    if mode == "training":
+        parser.add_argument("--nodes_to_exclude", default=None, type=str)
+    if mode == "training" or mode == "distillation":
         parser.add_argument("--weight_decay", default=0.01, type=float)
+        parser.add_argument("--warmup_ratio", default=0.06, type=float)
         parser.add_argument("--max_steps", default=-1, type=int)
         parser.add_argument("--gradient_accumulation_steps", default=1, type=int)
         parser.add_argument("--num_train_epochs", default=30, type=int)
@@ -220,6 +238,7 @@ def parse_args(mode):
 
 
 def get_model(args):
+    from model_compression.training_utils.processors import superglue_processors as processors
     args.task_name = args.task_name.lower()
     assert args.task_name in processors, f"Task {args.task_name} not found!"
     args.model_type = args.model_type.lower()
@@ -234,6 +253,8 @@ def get_model(args):
         num_labels=num_labels,
         finetuning_task=args.task_name,
     )
+    if output_modes[args.task_name] == "span_classification":
+        config.num_spans = tasks_num_spans[args.task_name]
     tokenizer = tokenizer_class.from_pretrained(args.model_checkpoint, do_lower_case=args.do_lower_case)
     model = model_class.from_pretrained(args.model_checkpoint, config=config)
     model_config = ModelConfig(data_dir=args.data_dir, model_type=args.model_type,

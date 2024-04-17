@@ -9,7 +9,7 @@ description = "NLP model compression on SuperGLUE Tasks"
 readme = "README.md"
 authors = [{name = "Alexander", email = "alexander@robonote.io"}]
 dependencies = [
-    "onnxruntime==1.8.0",
+    "onnxruntime==1.12.0",
     "boto3",
     "transformers",
     "scipy",

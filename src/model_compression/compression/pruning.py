@@ -5,6 +5,7 @@ import torch
 from heapq import heappush, heappop
 from ..training_utils.metrics import superglue_compute_metrics
 from ..training_utils.datasets import load_and_cache_examples
+from ..training_utils.utils import parse_args, get_model, PruneConfig, output_modes
 
 
 def sort_by_importance(weight, bias, importance, num_instances, stride):
@@ -32,11 +33,11 @@ def sort_by_importance(weight, bias, importance, num_instances, stride):
         (sorted_bias_to_concat) if sorted_bias_to_concat is not None else None
 
 
-def prune_rewire(prune_config, task_name, model, tokenizer, output_mode, data_dir, prefix="", use_tqdm=True, device="cpu" ,):
+def prune_rewire(prune_config, model, tokenizer, model_config, prefix="", use_tqdm=True, device="cpu"):
     split = "dev"
     results = {}
 
-    eval_dataset = load_and_cache_examples(task_name, tokenizer, data_dir, split=split)
+    eval_dataset = load_and_cache_examples(model_config.task_name, tokenizer, model_config.data_dir, split=split)
     eval_answers = None
 
     eval_sampler = SequentialSampler(eval_dataset)
@@ -64,6 +65,7 @@ def prune_rewire(prune_config, task_name, model, tokenizer, output_mode, data_di
     ex_ids = None
     eval_dataloader = tqdm(eval_dataloader, desc="Evaluating") if use_tqdm else eval_dataloader
     tot_tokens = 0.0
+    output_mode = output_modes[model_config.task_name]
     for batch in eval_dataloader:
         model.eval()
         batch = tuple(t.to(device) for t in batch)
@@ -172,7 +174,8 @@ def prune_rewire(prune_config, task_name, model, tokenizer, output_mode, data_di
         layers._modules[str(layer_num)].output.dense.weight = torch.nn.Parameter(weight_sorted)
 
     torch.save(model,
-               f"pruned_models/pruned_{prune_config.target_num_heads}_{prune_config.target_ffn_dim}_{task_name}.pt")
+               f"pruned_models/pruned_{prune_config.target_num_heads}"
+               f"_{prune_config.target_ffn_dim}_{model_config.task_name}.pt")
 
     ex_ids = np.concatenate(ex_ids, axis=0)
     if output_mode in ["classification", "span_classification"]:
@@ -180,7 +183,8 @@ def prune_rewire(prune_config, task_name, model, tokenizer, output_mode, data_di
     elif output_mode == "regression":
         preds = np.squeeze(preds)
     if split != "test":
-        result = superglue_compute_metrics(task_name, preds, out_label_ids, guids=ex_ids, answers=eval_answers)
+        result = superglue_compute_metrics(model_config.task_name, preds, out_label_ids, guids=ex_ids,
+                                           answers=eval_answers)
         results.update(result)
         output_eval_file = "eval_results.txt"
         with open(output_eval_file, "w") as writer:
@@ -191,7 +195,13 @@ def prune_rewire(prune_config, task_name, model, tokenizer, output_mode, data_di
 
 
 def main():
-    pass
+    args = parse_args("prune")
+    _, tokenizer, model_config = get_model(args)
+    model = torch.load(args.model_path)
+    prune_config = PruneConfig(dont_normalize_importance_by_layer=args.dont_normalize_importance_by_layer,
+                               target_ffn_dim=args.target_ffn_dim, target_num_heads=args.target_num_heads)
+    results, preds, ex_ids = prune_rewire(prune_config, model_config, model, tokenizer, prefix="",
+                                          use_tqdm=True, device="cpu")
 
 
 if __name__ == "__main__":

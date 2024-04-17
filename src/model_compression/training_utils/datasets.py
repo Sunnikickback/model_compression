@@ -1,9 +1,9 @@
 import torch
 from torch.utils.data import TensorDataset
 
-from .processors import processors
-from .utils import SpanClassificationExample, InputFeatures
-from .utils import output_modes, SpanClassificationFeatures
+from model_compression.training_utils.processors import superglue_processors as processors
+from model_compression.training_utils.utils import SpanClassificationExample, InputFeatures
+from model_compression.training_utils.utils import output_modes, SpanClassificationFeatures
 
 
 def tokenize_tracking_span(tokenizer, text, spans):

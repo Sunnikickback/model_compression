@@ -49,6 +49,8 @@ class RobertaForSpanClassification(RobertaPreTrainedModel):
         head_mask=None,
         inputs_embeds=None,
         labels=None,
+        output_attentions=None,
+        output_hidden_states=None
     ):
 
         outputs = self.roberta(
@@ -57,6 +59,8 @@ class RobertaForSpanClassification(RobertaPreTrainedModel):
             token_type_ids=token_type_ids,
             position_ids=position_ids,
             head_mask=head_mask,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states,
             inputs_embeds=inputs_embeds,
         )
 

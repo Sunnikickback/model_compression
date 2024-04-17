@@ -10,19 +10,19 @@ from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from tqdm import tqdm
 from transformers import AdamW, get_linear_schedule_with_warmup
 
-from src.model_compression.training_utils.processors import processors
-from .datasets import load_and_cache_examples
-from .metrics import superglue_compute_metrics
-from .utils import TrainConfig, task_metrics, set_seed, get_model, parse_args
-from ..training_utils.utils import ModelConfig, output_modes
+from model_compression.training_utils.processors import superglue_processors as processors
+from model_compression.training_utils.datasets import load_and_cache_examples
+from model_compression.training_utils.metrics import superglue_compute_metrics
+from model_compression.training_utils.utils import TrainConfig, task_metrics, set_seed, get_model, parse_args, ModelConfig, output_modes
 
 
 def evaluate(model, tokenizer, model_config, eval_batch_size, device,
-             use_fixed_seq_length, split="dev", prefix="", use_tqdm=True):
+             use_fixed_seq_length, split="dev", prefix="", use_tqdm=True, max_seq_length=512):
     output_mode = output_modes[model_config.task_name]
     results = {}
 
-    eval_dataset = load_and_cache_examples(model_config=model_config, tokenizer=tokenizer, split=split)
+    eval_dataset = load_and_cache_examples(model_config=model_config, tokenizer=tokenizer, split=split,
+                                           max_seq_length=max_seq_length)
 
     eval_sampler = SequentialSampler(eval_dataset)
     eval_dataloader = DataLoader(eval_dataset, sampler=eval_sampler, batch_size=eval_batch_size)
@@ -89,6 +89,7 @@ def evaluate(model, tokenizer, model_config, eval_batch_size, device,
 
 
 def train(train_dataset, model, tokenizer, model_config, train_config: TrainConfig, device="cuda:0"):
+    model.to(device)
     output_mode = output_modes[model_config.task_name]
 
     train_sampler = RandomSampler(train_dataset)
@@ -111,7 +112,7 @@ def train(train_dataset, model, tokenizer, model_config, train_config: TrainConf
         {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
     ]
 
-    optimizer = AdamW(optimizer_grouped_parameters, lr=train_config.learning_rate, eps=train_config.adam_epsilon)
+    optimizer = AdamW(optimizer_grouped_parameters, lr=train_config.learning_rate, eps=train_config.adam_epsilon, )
     scheduler = get_linear_schedule_with_warmup(
         optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=t_total
     )
@@ -256,7 +257,7 @@ def main():
     train_config = TrainConfig().from_args(args)
     _, _ = train(train_dataset, model, tokenizer, model_config=model_config, train_config=train_config)
     result, preds, ex_ids = evaluate(model, tokenizer, model_config=model_config,
-                                     eval_batch_size=train_config.eval_batch_size,
+                                     eval_batch_size=train_config.eval_batch_size, max_seq_length=args.max_seq_length,
                                      device="cuda:0", use_fixed_seq_length=False, use_tqdm=True)
 
     result = dict((f"{k}", v) for k, v in result.items())
@@ -271,6 +272,8 @@ def main():
 
         processor = processors[eval_task_name]()
         processor.write_preds(preds, ex_ids, "")
+
+    torch.save(model, f"{model_config.model_type}_{model_config.task_name}.pt")
 
 
 if __name__ == "__main__":

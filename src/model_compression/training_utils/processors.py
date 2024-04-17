@@ -2,7 +2,7 @@ import os
 import json
 from collections import defaultdict
 import operator
-from .utils import DataProcessor, InputExample, SpanClassificationExample
+from model_compression.training_utils.utils import DataProcessor, InputExample, SpanClassificationExample
 
 
 class BoolqProcessor(DataProcessor):
@@ -323,7 +323,7 @@ class RteProcessor(DataProcessor):
                 pred_label = idx2label[int(pred_exid[0])]
                 pred_fh.write(f"{json.dumps({'idx': idx, 'label': pred_label})}\n")
 
-processors = {
+superglue_processors = {
     "boolq": BoolqProcessor,
     "cb": CbProcessor,
     "copa": CopaProcessor,
